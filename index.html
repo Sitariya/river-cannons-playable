@@ -81849,14 +81849,13 @@ class PrimitiveEffects {
     this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.lastEvent = 0;
     this.particles = [];
-    this.flashes = [];
     this.capacity = 512;
     this.transform = new T.Object3D();
     this.color = new T.Color();
     this.boxes = new T.InstancedMesh(new T.BoxGeometry(1, 1, 1), new T.MeshBasicMaterial(), this.capacity);
     this.spheres = new T.InstancedMesh(new T.SphereGeometry(1, 8, 6), new T.MeshBasicMaterial(), this.capacity);
     this.boxes.name = 'Impact particle boxes';
-    this.spheres.name = 'Muzzle and trail spheres';
+    this.spheres.name = 'Projectile trail spheres';
     for (const batch of [this.boxes, this.spheres]) {
       batch.count = 0;
       batch.frustumCulled = false;
@@ -81884,7 +81883,6 @@ class PrimitiveEffects {
       this.lastEvent = event.id;
       this.stats[event.kind === 'hit' ? 'hits' : 'shots']++;
       if (this.reduced) continue;
-      if (event.kind === 'shot' && game.time - event.time < cfg.muzzleLife) this.flashes.push(event);
       if (event.kind === 'hit' && game.time - event.time < cfg.particleLife) {
         for (let i = 0; i < cfg.particlesPerHit; i++) {
           const angle = event.id * 2.399963 + i * Math.PI * 2 / cfg.particlesPerHit;
@@ -81894,16 +81892,11 @@ class PrimitiveEffects {
       }
     }
     this.particles = this.particles.filter(p => game.time - p.time < cfg.particleLife);
-    this.flashes = this.flashes.filter(p => game.time - p.time < cfg.muzzleLife);
     let boxes = 0, spheres = 0;
     for (const p of this.particles) {
       const age = game.time - p.time, t = age / cfg.particleLife;
       const position = p.position.map((v, axis) => v + p.velocity[axis] * age + (axis === 1 ? .045 - 1.6 * age * age : 0));
       boxes = this.add(this.boxes, boxes, position, p.size * (1 - t) ** 1.2, this.colors[p.color], p.spin + age * 12);
-    }
-    for (const p of this.flashes) {
-      const t = (game.time - p.time) / cfg.muzzleLife;
-      spheres = this.add(this.spheres, spheres, p.position, cfg.muzzleSize * (1 - t), 0xfff5c7);
     }
     if (!this.reduced) for (const shot of game.projectiles) {
       const delta = shot.impact.map((v, i) => v - shot.origin[i]);
@@ -82694,8 +82687,8 @@ class Hud {
     if (this.reduced) return;
     node.feedbackAnimation?.cancel();
     node.feedbackAnimation = node.animate([
-      { transform: 'translate(-50%,-50%) scale(' + scale + ')', boxShadow: '0 0 0 3px ' + tint },
-      { transform: 'translate(-50%,-50%) scale(1)', boxShadow: '0 0 0 0px rgba(255,255,255,0)' },
+      { transform: 'translate(-50%,-50%) scale(' + scale + ')', ...(tint ? { boxShadow: '0 0 0 3px ' + tint } : {}) },
+      { transform: 'translate(-50%,-50%) scale(1)', ...(tint ? { boxShadow: '0 0 0 0px rgba(255,255,255,0)' } : {}) },
     ], { duration, easing: 'cubic-bezier(.2,.7,.3,1)' });
   }
 
@@ -82739,7 +82732,7 @@ class Hud {
       this.node.append(node);
     }
     if (node.dataset.text !== text) {
-      if (node.dataset.text) { this.reactions.ammo++; this.pulse(node,cfg.polish.ammoPulseMs,1.16); }
+      if (node.dataset.text) { this.reactions.ammo++; this.pulse(node,cfg.polish.ammoPulseMs,1.16,null); }
       node.dataset.text = text;
       node.src = this.digitArt(text);
     }
